@@ -10,6 +10,7 @@ import (
 type RestaurantRepository interface {
 	FindByID(ctx context.Context, id int64) (*model.Restaurant, error)
 	FindAll(ctx context.Context) ([]*model.Restaurant, error)
+	FindBusinessHoursByDay(ctx context.Context, restaurantID int64, dayOfWeek int) (*model.RestaurantBusinessHours, error)
 }
 
 type restaurantRepo struct {
@@ -34,6 +35,28 @@ func (r *restaurantRepo) FindByID(ctx context.Context, id int64) (*model.Restaur
 		return nil, err
 	}
 	return &res, nil
+}
+
+func (r *restaurantRepo) FindBusinessHoursByDay(ctx context.Context, restaurantID int64, dayOfWeek int) (*model.RestaurantBusinessHours, error) {
+	var bh model.RestaurantBusinessHours
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, restaurant_id, day_of_week, open_time, close_time,
+		       slot_duration_minutes, max_capacity_per_slot, is_active, created_at
+		FROM restaurant_business_hours
+		WHERE restaurant_id = $1 AND day_of_week = $2 AND is_active = TRUE
+	`, restaurantID, dayOfWeek).Scan(
+		&bh.ID, &bh.RestaurantID, &bh.DayOfWeek,
+		&bh.OpenTime, &bh.CloseTime,
+		&bh.SlotDurationMinutes, &bh.MaxCapacityPerSlot,
+		&bh.IsActive, &bh.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &bh, nil
 }
 
 func (r *restaurantRepo) FindAll(ctx context.Context) ([]*model.Restaurant, error) {

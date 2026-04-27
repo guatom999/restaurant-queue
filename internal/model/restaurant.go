@@ -23,3 +23,19 @@ type RestaurantBusinessHours struct {
 	IsActive            bool      `json:"is_active"`
 	CreatedAt           time.Time `json:"created_at"`
 }
+
+type TimeSlot struct {
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+	Capacity  int    `json:"capacity"`
+}
+
+type AvailabilityResult struct {
+	RestaurantID   int64      `json:"restaurant_id"`
+	Date           string     `json:"date"`
+	IsOpen         bool       `json:"is_open"`
+	Slots          []TimeSlot `json:"slots"`
+	TotalCapacity  int        `json:"total_capacity"`
+	TotalBooked    int        `json:"total_booked"`
+	TotalAvailable int        `json:"total_available"`
+}

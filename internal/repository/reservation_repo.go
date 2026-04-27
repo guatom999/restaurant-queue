@@ -14,6 +14,7 @@ type ReservationRepository interface {
 	Create(ctx context.Context, r *model.Reservation) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status model.ReservationStatus) error
 	NextQueueNumber(ctx context.Context, restaurantID int64, date time.Time) (int, error)
+	CountActiveByDate(ctx context.Context, restaurantID int64, date time.Time) (int, error)
 }
 
 type reservationRepo struct {
@@ -95,6 +96,17 @@ func (r *reservationRepo) UpdateStatus(ctx context.Context, id int64, status mod
 	}
 	_, err := r.db.ExecContext(ctx, query, status, id)
 	return err
+}
+
+func (r *reservationRepo) CountActiveByDate(ctx context.Context, restaurantID int64, date time.Time) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM reservations
+		 WHERE restaurant_id = $1
+		   AND reserved_for_date = $2
+		   AND status IN ('WAITING', 'CALLED', 'SEATED')`,
+		restaurantID, date.Format("2006-01-02")).Scan(&count)
+	return count, err
 }
 
 func (r *reservationRepo) NextQueueNumber(ctx context.Context, restaurantID int64, date time.Time) (int, error) {

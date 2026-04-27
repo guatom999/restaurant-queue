@@ -19,7 +19,7 @@ func main() {
 	reservationSvc := service.NewReservationService(reservationRepo)
 
 	restaurantRepo := repository.NewRestaurantRepo(db)
-	restaurantSvc := service.NewRestaurantService(restaurantRepo)
+	restaurantSvc := service.NewRestaurantService(restaurantRepo, reservationRepo)
 
 	slog.Info("starting server", "addr", cfg.HTTPAddr)
 	if err := server.New(reservationSvc, restaurantSvc).Start(cfg.HTTPAddr); err != nil {
