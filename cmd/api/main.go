@@ -8,6 +8,7 @@ import (
 	"github.com/workshop/restaurant-api/internal/server"
 	"github.com/workshop/restaurant-api/internal/service"
 	"github.com/workshop/restaurant-api/pkg/database"
+	kafkapkg "github.com/workshop/restaurant-api/pkg/kafka"
 )
 
 func main() {
@@ -15,8 +16,13 @@ func main() {
 	db := database.NewPostgres(cfg.DatabaseURL)
 	defer db.Close()
 
+	kafkaWriter := kafkapkg.NewWriter(cfg.KafkaBrokers, cfg.KafkaTopicReservation)
+	defer kafkaWriter.Close()
+	publisher := kafkapkg.NewKafkaPublisher(kafkaWriter)
+	slog.Info("kafka producer ready", "brokers", cfg.KafkaBrokers, "topic", cfg.KafkaTopicReservation)
+
 	reservationRepo := repository.NewReservationRepo(db)
-	reservationSvc := service.NewReservationService(reservationRepo)
+	reservationSvc := service.NewReservationService(reservationRepo, publisher)
 
 	restaurantRepo := repository.NewRestaurantRepo(db)
 	restaurantSvc := service.NewRestaurantService(restaurantRepo, reservationRepo)
