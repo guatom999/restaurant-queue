@@ -29,11 +29,11 @@ func (r *reservationRepo) FindByID(ctx context.Context, id int64) (*model.Reserv
 	var res model.Reservation
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, reservation_code, user_id, restaurant_id, queue_number,
-		        party_size, status, reserved_for_date, reserved_at,
+		        party_size, status, reserve_start_time, reserved_for_date, reserved_at,
 		        called_at, completed_at, cancelled_at, note
 		 FROM reservations WHERE id = $1`, id).
 		Scan(&res.ID, &res.ReservationCode, &res.UserID, &res.RestaurantID, &res.QueueNumber,
-			&res.PartySize, &res.Status, &res.ReservedForDate, &res.ReservedAt,
+			&res.PartySize, &res.Status, &res.ReserveStartTime, &res.ReservedForDate, &res.ReservedAt,
 			&res.CalledAt, &res.CompletedAt, &res.CancelledAt, &res.Note)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -47,7 +47,7 @@ func (r *reservationRepo) FindByID(ctx context.Context, id int64) (*model.Reserv
 func (r *reservationRepo) FindByRestaurant(ctx context.Context, restaurantID int64) ([]model.Reservation, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, reservation_code, user_id, restaurant_id, queue_number,
-		        party_size, status, reserved_for_date, reserved_at,
+		        party_size, status, reserve_start_time, reserved_for_date, reserved_at,
 		        called_at, completed_at, cancelled_at, note
 		 FROM reservations WHERE restaurant_id = $1
 		 ORDER BY reserved_for_date, queue_number`, restaurantID)
@@ -60,7 +60,7 @@ func (r *reservationRepo) FindByRestaurant(ctx context.Context, restaurantID int
 	for rows.Next() {
 		var res model.Reservation
 		if err := rows.Scan(&res.ID, &res.ReservationCode, &res.UserID, &res.RestaurantID, &res.QueueNumber,
-			&res.PartySize, &res.Status, &res.ReservedForDate, &res.ReservedAt,
+			&res.PartySize, &res.Status, &res.ReserveStartTime, &res.ReservedForDate, &res.ReservedAt,
 			&res.CalledAt, &res.CompletedAt, &res.CancelledAt, &res.Note); err != nil {
 			return nil, err
 		}
@@ -97,10 +97,10 @@ func (r *reservationRepo) Create(ctx context.Context, res *model.Reservation) (i
 	if err := tx.QueryRowContext(ctx,
 		`INSERT INTO reservations
 		        (reservation_code, user_id, restaurant_id, queue_number,
-		         party_size, status, reserved_for_date, note)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+		         party_size, status, reserve_start_time, reserved_for_date, note)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
 		res.ReservationCode, res.UserID, res.RestaurantID, res.QueueNumber,
-		res.PartySize, res.Status, res.ReservedForDate, res.Note).Scan(&id); err != nil {
+		res.PartySize, res.Status, res.ReserveStartTime, res.ReservedForDate, res.Note).Scan(&id); err != nil {
 		return 0, err
 	}
 

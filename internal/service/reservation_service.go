@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/workshop/restaurant-api/internal/model"
 	"github.com/workshop/restaurant-api/internal/repository"
@@ -52,6 +53,12 @@ func (s *reservationService) ListReservations(ctx context.Context, restaurantID 
 func (s *reservationService) BookReservation(ctx context.Context, r *model.Reservation) (int64, error) {
 	if r.UserID <= 0 {
 		return 0, errors.New("user_id is required")
+	}
+	if r.ReserveStartTime == "" {
+		return 0, errors.New("reserve_start_time is required")
+	}
+	if _, err := time.Parse("15:04", r.ReserveStartTime); err != nil {
+		return 0, errors.New("reserve_start_time must be in HH:MM format")
 	}
 	if r.PartySize <= 0 {
 		return 0, errors.New("party size must be greater than zero")

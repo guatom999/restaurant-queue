@@ -26,13 +26,6 @@ func (h *ReservationHandler) RegisterRoutes(app *fiber.App) {
 	app.Patch("/api/v1/reservations/:id/cancel", h.cancel)
 }
 
-type bookRequest struct {
-	UserID          int64  `json:"user_id"`
-	PartySize       int    `json:"party_size"`
-	ReservedForDate string `json:"reserved_for_date"` // "2006-01-02"
-	Note            string `json:"note"`
-}
-
 func (h *ReservationHandler) list(c *fiber.Ctx) error {
 	restaurantID, err := strconv.ParseInt(c.Params("restaurantID"), 10, 64)
 	if err != nil {
@@ -51,7 +44,7 @@ func (h *ReservationHandler) book(c *fiber.Ctx) error {
 		return writeError(c, fiber.StatusBadRequest, "invalid restaurant id")
 	}
 
-	var req bookRequest
+	var req reservationRequest
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, fiber.StatusBadRequest, "invalid request body")
 	}
@@ -62,11 +55,12 @@ func (h *ReservationHandler) book(c *fiber.Ctx) error {
 	}
 
 	res := model.Reservation{
-		UserID:          req.UserID,
-		RestaurantID:    restaurantID,
-		PartySize:       req.PartySize,
-		ReservedForDate: reservedFor,
-		Note:            req.Note,
+		UserID:           req.UserID,
+		RestaurantID:     restaurantID,
+		PartySize:        req.PartySize,
+		ReserveStartTime: req.ReserveStartTime,
+		ReservedForDate:  reservedFor,
+		Note:             req.Note,
 	}
 
 	id, err := h.svc.BookReservation(c.Context(), &res)

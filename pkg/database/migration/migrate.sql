@@ -1,5 +1,5 @@
 -- ตาราง user ของระบบ (ลูกค้าที่จอง)
-CREATE TABLE users
+CREATE TABLE IF NOT EXISTS users
 (
     id BIGSERIAL PRIMARY KEY,
     phone VARCHAR(20) UNIQUE NOT NULL,
@@ -8,10 +8,10 @@ CREATE TABLE users
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_phone ON users(phone);
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 
 -- ตารางร้านอาหารที่เปิดให้จองคิว
-CREATE TABLE restaurants
+CREATE TABLE IF NOT EXISTS restaurants
 (
     id BIGSERIAL PRIMARY KEY,
     code VARCHAR(20) UNIQUE NOT NULL,
@@ -24,10 +24,10 @@ CREATE TABLE restaurants
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_restaurants_active ON restaurants(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_restaurants_active ON restaurants(is_active) WHERE is_active = TRUE;
 
 -- ตารางหลักของการจองคิว
-CREATE TABLE reservations
+CREATE TABLE IF NOT EXISTS reservations
 (
     id BIGSERIAL PRIMARY KEY,
     reservation_code VARCHAR(30) UNIQUE NOT NULL,
@@ -39,6 +39,8 @@ CREATE TABLE reservations
     party_size INT NOT NULL DEFAULT 1,
     -- จำนวนคนที่มาทาน
     status VARCHAR(20) NOT NULL DEFAULT 'WAITING',
+    reserve_start_time VARCHAR(5) NOT NULL,
+    -- เวลาเริ่มต้นของ slot ที่จอง เช่น '11:30'
     reserved_for_date DATE NOT NULL,
     -- วันที่มาใช้บริการ
     reserved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -54,13 +56,13 @@ CREATE TABLE reservations
 );
 
 -- Index สำหรับ query ที่ใช้บ่อย
-CREATE INDEX idx_reservations_user ON reservations(user_id);
-CREATE INDEX idx_reservations_restaurant_date ON reservations(restaurant_id, reserved_for_date);
-CREATE INDEX idx_reservations_status ON reservations(status) WHERE status IN ('WAITING','CALLED','SEATED');
-CREATE UNIQUE INDEX idx_reservations_queue ON reservations(restaurant_id, reserved_for_date, queue_number);
+CREATE INDEX IF NOT EXISTS idx_reservations_user ON reservations(user_id);
+CREATE INDEX IF NOT EXISTS idx_reservations_restaurant_date ON reservations(restaurant_id, reserved_for_date);
+CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status) WHERE status IN ('WAITING','CALLED','SEATED');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reservations_queue ON reservations(restaurant_id, reserved_for_date, queue_number);
 
 -- เวลาทำการของร้านในแต่ละวัน + การแบ่ง slot
-CREATE TABLE restaurant_business_hours
+CREATE TABLE IF NOT EXISTS restaurant_business_hours
 (
     id BIGSERIAL PRIMARY KEY,
     restaurant_id BIGINT NOT NULL REFERENCES restaurants(id),
@@ -80,11 +82,11 @@ CREATE TABLE restaurant_business_hours
     CONSTRAINT uq_restaurant_day     UNIQUE (restaurant_id, day_of_week)
 );
 
-CREATE INDEX idx_biz_hours_restaurant ON restaurant_business_hours(restaurant_id);
-CREATE INDEX idx_biz_hours_active     ON restaurant_business_hours(restaurant_id, day_of_week, is_active);
+CREATE INDEX IF NOT EXISTS idx_biz_hours_restaurant ON restaurant_business_hours(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_biz_hours_active     ON restaurant_business_hours(restaurant_id, day_of_week, is_active);
 
 -- Outbox pattern: สำหรับส่ง event ไป Kafka อย่างปลอดภัย
-CREATE TABLE event_outbox
+CREATE TABLE IF NOT EXISTS event_outbox
 (
     id BIGSERIAL PRIMARY KEY,
     aggregate_type VARCHAR(50) NOT NULL,
@@ -100,4 +102,4 @@ CREATE TABLE event_outbox
     -- NULL = ยังไม่ได้ publish
 );
 
-CREATE INDEX idx_outbox_unpublished ON event_outbox(created_at) WHERE published_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_outbox_unpublished ON event_outbox(created_at) WHERE published_at IS NULL;

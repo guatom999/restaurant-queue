@@ -14,17 +14,18 @@ const (
 )
 
 type Reservation struct {
-	ID              int64             `json:"id"`
-	ReservationCode string            `json:"reservation_code"`
-	UserID          int64             `json:"user_id"`
-	RestaurantID    int64             `json:"restaurant_id"`
-	QueueNumber     int               `json:"queue_number"`
-	PartySize       int               `json:"party_size"`
-	Status          ReservationStatus `json:"status"`
-	ReservedForDate time.Time         `json:"reserved_for_date"`
-	ReservedAt      time.Time         `json:"reserved_at"`
-	CalledAt        *time.Time        `json:"called_at"`
-	CompletedAt     *time.Time        `json:"completed_at"`
-	CancelledAt     *time.Time        `json:"cancelled_at"`
-	Note            string            `json:"note"`
+	ID               int64             `json:"id"`
+	ReservationCode  string            `json:"reservation_code"`
+	UserID           int64             `json:"user_id"`
+	RestaurantID     int64             `json:"restaurant_id"`
+	QueueNumber      int               `json:"queue_number"`
+	PartySize        int               `json:"party_size"`
+	Status           ReservationStatus `json:"status"`
+	ReserveStartTime string            `json:"reserve_start_time"`
+	ReservedForDate  time.Time         `json:"reserved_for_date"`
+	ReservedAt       time.Time         `json:"reserved_at"`
+	CalledAt         *time.Time        `json:"called_at"`
+	CompletedAt      *time.Time        `json:"completed_at"`
+	CancelledAt      *time.Time        `json:"cancelled_at"`
+	Note             string            `json:"note"`
 }
