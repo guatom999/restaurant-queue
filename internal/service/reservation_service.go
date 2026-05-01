@@ -2,14 +2,20 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"log/slog"
 
 	"github.com/workshop/restaurant-api/internal/model"
 	"github.com/workshop/restaurant-api/internal/repository"
 )
 
 var ErrReservationNotFound = errors.New("reservation not found")
+
+// Publisher publishes a raw JSON payload to a message broker.
+type Publisher interface {
+	Publish(ctx context.Context, payload []byte) error
+}
 
 type ReservationService interface {
 	GetReservation(ctx context.Context, id int64) (*model.Reservation, error)
@@ -20,11 +26,12 @@ type ReservationService interface {
 }
 
 type reservationService struct {
-	repo repository.ReservationRepository
+	repo      repository.ReservationRepository
+	publisher Publisher
 }
 
-func NewReservationService(repo repository.ReservationRepository) ReservationService {
-	return &reservationService{repo: repo}
+func NewReservationService(repo repository.ReservationRepository, publisher Publisher) ReservationService {
+	return &reservationService{repo: repo, publisher: publisher}
 }
 
 func (s *reservationService) GetReservation(ctx context.Context, id int64) (*model.Reservation, error) {
@@ -53,15 +60,26 @@ func (s *reservationService) BookReservation(ctx context.Context, r *model.Reser
 		return 0, errors.New("reserved_for_date is required")
 	}
 
-	queueNum, err := s.repo.NextQueueNumber(ctx, r.RestaurantID, r.ReservedForDate)
+	r.Status = model.ReservationStatusWaiting
+
+	id, err := s.repo.Create(ctx, r)
 	if err != nil {
 		return 0, err
 	}
+	r.ID = id
 
-	r.QueueNumber = queueNum
-	r.ReservationCode = fmt.Sprintf("Q%04d", queueNum)
-	r.Status = model.ReservationStatusWaiting
-	return s.repo.Create(ctx, r)
+	if s.publisher != nil {
+		payload, err := json.Marshal(r)
+		if err != nil {
+			slog.Error("failed to marshal reservation event", "reservation_id", id, "err", err)
+		} else if err := s.publisher.Publish(ctx, payload); err != nil {
+			slog.Error("failed to publish reservation event", "reservation_id", id, "err", err)
+		} else {
+			slog.Info("reservation event published", "reservation_id", id, "reservation_code", r.ReservationCode, "status", r.Status)
+		}
+	}
+
+	return id, nil
 }
 
 func (s *reservationService) ConfirmReservation(ctx context.Context, id int64) error {

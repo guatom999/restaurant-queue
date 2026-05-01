@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/workshop/restaurant-api/internal/model"
@@ -13,7 +14,6 @@ type ReservationRepository interface {
 	FindByRestaurant(ctx context.Context, restaurantID int64) ([]model.Reservation, error)
 	Create(ctx context.Context, r *model.Reservation) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status model.ReservationStatus) error
-	NextQueueNumber(ctx context.Context, restaurantID int64, date time.Time) (int, error)
 	CountActiveByDate(ctx context.Context, restaurantID int64, date time.Time) (int, error)
 }
 
@@ -70,16 +70,41 @@ func (r *reservationRepo) FindByRestaurant(ctx context.Context, restaurantID int
 }
 
 func (r *reservationRepo) Create(ctx context.Context, res *model.Reservation) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	// advisory lock per restaurant to serialize concurrent bookings on the same day
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, res.RestaurantID); err != nil {
+		return 0, err
+	}
+
+	var queueNum int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(queue_number), 0) + 1
+		 FROM reservations
+		 WHERE restaurant_id = $1 AND reserved_for_date = $2`,
+		res.RestaurantID, res.ReservedForDate.Format("2006-01-02")).Scan(&queueNum); err != nil {
+		return 0, err
+	}
+
+	res.QueueNumber = queueNum
+	res.ReservationCode = fmt.Sprintf("Q%04d", queueNum)
+
 	var id int64
-	err := r.db.QueryRowContext(ctx,
+	if err := tx.QueryRowContext(ctx,
 		`INSERT INTO reservations
 		        (reservation_code, user_id, restaurant_id, queue_number,
 		         party_size, status, reserved_for_date, note)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		res.ReservationCode, res.UserID, res.RestaurantID, res.QueueNumber,
-		res.PartySize, res.Status, res.ReservedForDate, res.Note).
-		Scan(&id)
-	return id, err
+		res.PartySize, res.Status, res.ReservedForDate, res.Note).Scan(&id); err != nil {
+		return 0, err
+	}
+
+	return id, tx.Commit()
 }
 
 func (r *reservationRepo) UpdateStatus(ctx context.Context, id int64, status model.ReservationStatus) error {
@@ -107,15 +132,4 @@ func (r *reservationRepo) CountActiveByDate(ctx context.Context, restaurantID in
 		   AND status IN ('WAITING', 'CALLED', 'SEATED')`,
 		restaurantID, date.Format("2006-01-02")).Scan(&count)
 	return count, err
-}
-
-func (r *reservationRepo) NextQueueNumber(ctx context.Context, restaurantID int64, date time.Time) (int, error) {
-	var next int
-	err := r.db.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(queue_number), 0) + 1
-		 FROM reservations
-		 WHERE restaurant_id = $1 AND reserved_for_date = $2`,
-		restaurantID, date.Format("2006-01-02")).
-		Scan(&next)
-	return next, err
 }

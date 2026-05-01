@@ -7,16 +7,14 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"github.com/workshop/restaurant-api/internal/model"
-	"github.com/workshop/restaurant-api/internal/service"
 )
 
 type ReservationWorker struct {
 	reader *kafka.Reader
-	svc    service.ReservationService
 }
 
-func NewReservationWorker(reader *kafka.Reader, svc service.ReservationService) *ReservationWorker {
-	return &ReservationWorker{reader: reader, svc: svc}
+func NewReservationWorker(reader *kafka.Reader) *ReservationWorker {
+	return &ReservationWorker{reader: reader}
 }
 
 func (w *ReservationWorker) Run(ctx context.Context) {
@@ -37,19 +35,23 @@ func (w *ReservationWorker) Run(ctx context.Context) {
 	}
 }
 
-func (w *ReservationWorker) process(ctx context.Context, msg kafka.Message) error {
+func (w *ReservationWorker) process(_ context.Context, msg kafka.Message) error {
 	var res model.Reservation
 	if err := json.Unmarshal(msg.Value, &res); err != nil {
 		return err
 	}
 
-	slog.Info("processing reservation event", "id", res.ID, "status", res.Status)
+	slog.Info("new reservation awaiting staff confirmation",
+		"reservation_id", res.ID,
+		"reservation_code", res.ReservationCode,
+		"restaurant_id", res.RestaurantID,
+		"party_size", res.PartySize,
+		"reserved_for_date", res.ReservedForDate,
+		"status", res.Status,
+	)
 
-	switch res.Status {
-	case model.ReservationStatusWaiting:
-		return w.svc.ConfirmReservation(ctx, res.ID)
-	default:
-		slog.Info("no action for reservation status", "status", res.Status)
-	}
+	// TODO: send booking confirmation notification to customer
+	// TODO: send new queue alert to restaurant staff
+
 	return nil
 }
