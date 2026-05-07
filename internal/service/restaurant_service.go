@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/workshop/restaurant-api/internal/model"
@@ -66,10 +67,20 @@ func (s *restaurantService) GetAvailability(ctx context.Context, restaurantID in
 
 	booked, err := s.reserveRepo.CountActiveByDate(ctx, restaurantID, date)
 	if err != nil {
+		log.Printf("Error CountActiveByDate for restaurant %d on %s: %v", restaurantID, date.Format("2006-01-02"), err)
+
 		return nil, err
 	}
 
-	slots := buildSlots(bh.OpenTime, bh.CloseTime, bh.SlotDurationMinutes, bh.MaxCapacityPerSlot)
+	reserved, err := s.reserveRepo.FindAvailabilityByDate(ctx, restaurantID, date)
+	if err != nil {
+		log.Printf("Error finding availability for restaurant %d on %s: %v", restaurantID, date.Format("2006-01-02"), err)
+		return nil, err
+	}
+
+	reservedTimeSlot := buildSlotsOfRestaurantByTime(reserved)
+
+	slots := buildSlots(bh.OpenTime, bh.CloseTime, bh.SlotDurationMinutes, bh.MaxCapacityPerSlot, reservedTimeSlot)
 	totalCapacity := len(slots) * bh.MaxCapacityPerSlot
 	available := totalCapacity - booked
 	if available < 0 {
@@ -84,7 +95,21 @@ func (s *restaurantService) GetAvailability(ctx context.Context, restaurantID in
 	return result, nil
 }
 
-func buildSlots(openTime, closeTime time.Time, durationMinutes, capacityPerSlot int) []model.TimeSlot {
+func buildSlotsOfRestaurantByTime(reserved []model.Reservation) map[string]int {
+	reservedTimeSlot := make(map[string]int, 0)
+
+	for _, i := range reserved {
+		if _, ok := reservedTimeSlot[i.ReserveStartTime]; ok {
+			reservedTimeSlot[i.ReserveStartTime]++
+		} else {
+			reservedTimeSlot[i.ReserveStartTime] = 1
+		}
+	}
+
+	return reservedTimeSlot
+}
+
+func buildSlots(openTime, closeTime time.Time, durationMinutes, capacityPerSlot int, reservedTimeSlot map[string]int) []model.TimeSlot {
 	var slots []model.TimeSlot
 	step := time.Duration(durationMinutes) * time.Minute
 	cur := openTime
@@ -96,7 +121,14 @@ func buildSlots(openTime, closeTime time.Time, durationMinutes, capacityPerSlot 
 		slots = append(slots, model.TimeSlot{
 			StartTime: cur.Format("15:04"),
 			EndTime:   end.Format("15:04"),
-			Capacity:  capacityPerSlot,
+			Capacity: func(startTime string) int {
+
+				if reserved, ok := reservedTimeSlot[startTime]; ok {
+					return capacityPerSlot - reserved
+				}
+
+				return capacityPerSlot
+			}(cur.Format("15:04")),
 		})
 		cur = end
 	}

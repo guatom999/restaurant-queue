@@ -12,9 +12,10 @@ import (
 type ReservationRepository interface {
 	FindByID(ctx context.Context, id int64) (*model.Reservation, error)
 	FindByRestaurant(ctx context.Context, restaurantID int64) ([]model.Reservation, error)
-	Create(ctx context.Context, r *model.Reservation) (int64, error)
+	Book(ctx context.Context, r *model.Reservation) (int64, error)
 	UpdateStatus(ctx context.Context, id int64, status model.ReservationStatus) error
 	CountActiveByDate(ctx context.Context, restaurantID int64, date time.Time) (int, error)
+	FindAvailabilityByDate(ctx context.Context, restaurantID int64, date time.Time) ([]model.Reservation, error)
 }
 
 type reservationRepo struct {
@@ -69,14 +70,15 @@ func (r *reservationRepo) FindByRestaurant(ctx context.Context, restaurantID int
 	return reservations, rows.Err()
 }
 
-func (r *reservationRepo) Create(ctx context.Context, res *model.Reservation) (int64, error) {
+// Book atomically acquires an advisory lock, assigns the next queue number, and inserts the reservation.
+// The lock is held for the duration of the transaction, preventing duplicate queue numbers under concurrency.
+func (r *reservationRepo) Book(ctx context.Context, res *model.Reservation) (int64, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
 
-	// advisory lock per restaurant to serialize concurrent bookings on the same day
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, res.RestaurantID); err != nil {
 		return 0, err
 	}
@@ -91,7 +93,7 @@ func (r *reservationRepo) Create(ctx context.Context, res *model.Reservation) (i
 	}
 
 	res.QueueNumber = queueNum
-	res.ReservationCode = fmt.Sprintf("Q%04d", queueNum)
+	res.ReservationCode = fmt.Sprintf("R%d-%s-Q%04d", res.RestaurantID, res.ReservedForDate.Format("20060102"), queueNum)
 
 	var id int64
 	if err := tx.QueryRowContext(ctx,
@@ -132,4 +134,33 @@ func (r *reservationRepo) CountActiveByDate(ctx context.Context, restaurantID in
 		   AND status IN ('WAITING', 'CALLED', 'SEATED')`,
 		restaurantID, date.Format("2006-01-02")).Scan(&count)
 	return count, err
+}
+
+func (r *reservationRepo) FindAvailabilityByDate(ctx context.Context, restaurantID int64, date time.Time) ([]model.Reservation, error) {
+
+	var reservations []model.Reservation
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, reservation_code, user_id, restaurant_id, queue_number,
+		        party_size, status, reserve_start_time, reserved_for_date, reserved_at,
+		        called_at, completed_at, cancelled_at, note
+			FROM reservations
+			WHERE restaurant_id = $1
+			AND reserved_for_date = $2`,
+		restaurantID, date.Format("2006-01-02"))
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var res model.Reservation
+		if err := rows.Scan(&res.ID, &res.ReservationCode, &res.UserID, &res.RestaurantID, &res.QueueNumber,
+			&res.PartySize, &res.Status, &res.ReserveStartTime, &res.ReservedForDate, &res.ReservedAt,
+			&res.CalledAt, &res.CompletedAt, &res.CancelledAt, &res.Note); err != nil {
+			return nil, err
+		}
+		reservations = append(reservations, res)
+	}
+	return reservations, rows.Err()
 }
