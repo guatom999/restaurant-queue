@@ -87,8 +87,8 @@ func (r *reservationRepo) Book(ctx context.Context, res *model.Reservation) (int
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COALESCE(MAX(queue_number), 0) + 1
 		 FROM reservations
-		 WHERE restaurant_id = $1 AND reserved_for_date = $2`,
-		res.RestaurantID, res.ReservedForDate.Format("2006-01-02")).Scan(&queueNum); err != nil {
+		 WHERE restaurant_id = $1 AND reserved_for_date = $2 AND reserve_start_time = $3 `,
+		res.RestaurantID, res.ReservedForDate.Format("2006-01-02"), res.ReserveStartTime).Scan(&queueNum); err != nil {
 		return 0, err
 	}
 
@@ -145,7 +145,9 @@ func (r *reservationRepo) FindAvailabilityByDate(ctx context.Context, restaurant
 		        called_at, completed_at, cancelled_at, note
 			FROM reservations
 			WHERE restaurant_id = $1
-			AND reserved_for_date = $2`,
+			AND reserved_for_date = $2
+			AND status IN ('CALLED', 'SEATED')
+			`,
 		restaurantID, date.Format("2006-01-02"))
 
 	if err != nil {
