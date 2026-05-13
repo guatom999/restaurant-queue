@@ -40,3 +40,40 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
+
+  discord-notification:
+    name: Send Discord Notification
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: always()
+
+    steps:
+      - name: Notify Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          STATUS: ${{ needs.build-and-push.result }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$STATUS" = "success" ]; then
+            COLOR=5763719
+            TITLE="✅ Deploy Succeeded"
+          else
+            COLOR=15548997
+            TITLE="❌ Deploy Failed"
+          fi
+
+          curl -H "Content-Type: application/json" \
+               -d "{
+                 \"embeds\": [{
+                   \"title\": \"$TITLE\",
+                   \"color\": $COLOR,
+                   \"fields\": [
+                     { \"name\": \"Branch\", \"value\": \"\`$BRANCH\`\", \"inline\": true },
+                     { \"name\": \"By\",     \"value\": \"$ACTOR\",     \"inline\": true },
+                     { \"name\": \"Commit\", \"value\": \"\`$SHA\`\",   \"inline\": false }
+                   ]
+                 }]
+               }" \
+               "$DISCORD_WEBHOOK_URL"
