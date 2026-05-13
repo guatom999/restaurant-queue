@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/workshop/restaurant-api/internal/model"
@@ -93,7 +94,8 @@ func (r *reservationRepo) Book(ctx context.Context, res *model.Reservation) (int
 	}
 
 	res.QueueNumber = queueNum
-	res.ReservationCode = fmt.Sprintf("R%d-%s-Q%04d", res.RestaurantID, res.ReservedForDate.Format("20060102"), queueNum)
+	timeSlot := strings.ReplaceAll(res.ReserveStartTime, ":", "")
+	res.ReservationCode = fmt.Sprintf("R%d-%s-%s-Q%04d", res.RestaurantID, res.ReservedForDate.Format("20060102"), timeSlot, queueNum)
 
 	var id int64
 	if err := tx.QueryRowContext(ctx,
