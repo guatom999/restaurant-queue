@@ -6,9 +6,19 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
-    name: Build & Push to
+  build-and-push:
+    name: Build & Push Docker Images
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - name: api
+            dockerfile: Dockerfile.api
+            image: restaurant-api
+          - name: worker
+            dockerfile: Dockerfile.worker
+            image: restaurant-worker
 
     steps:
       - name: Checkout repository
@@ -23,9 +33,10 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push Docker Image
+      - name: Build and Push ${{ matrix.name }}
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/restaurant-api:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latestrestaurant-api:latest
