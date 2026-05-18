@@ -57,6 +57,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Pull image
+        run: |
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}:latest
+
+      - name: Docker Compose up
+        run: |
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
   discord-notification:
     name: Send Discord Notification
     runs-on: ubuntu-latest
