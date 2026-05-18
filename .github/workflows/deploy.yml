@@ -68,7 +68,7 @@ jobs:
   discord-notification:
     name: Send Discord Notification
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: deploy
     if: always()
 
     steps:
